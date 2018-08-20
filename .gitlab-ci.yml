@@ -1,0 +1,19 @@
+image: 'node:8'
+
+before_script:
+  - 'npm install -g serverless'
+  - 'npm install'
+
+deploy-to-staging:
+  stage: 'deploy'
+  script:
+    - 'serverless deploy -s staging'
+  only:
+    - 'develop'
+
+deploy-to-production:
+  stage: 'deploy'
+  script:
+    - 'serverless deploy -s production'
+  only:
+    - 'tags'

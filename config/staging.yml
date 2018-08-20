@@ -1,0 +1,21 @@
+capacities:
+  - table: 'DynamoDbTable'
+    read:
+      minimum: 1
+      maximum: 1
+      usage: 0.8
+    write:
+      minimum: 1
+      maximum: 1
+      usage: 0.8
+customDomain:
+  domainName: 'files-staging.huydinh.eu'
+  basePath: ''
+  createRoute53Record: true
+  endpointType: 'regional'
+deploymentBucket:
+  name: 'artifacts.huydinh.eu'
+dynamoDbTable: 'files-staging.huydinh.eu'
+endpointType: 'REGIONAL'
+rootUri: 'https://staging.huydinh.eu'
+s3Bucket: 'files-staging.huydinh.eu'

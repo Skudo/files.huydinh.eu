@@ -1,0 +1,229 @@
+plugins:
+  - 'serverless-domain-manager'
+  - 'serverless-dynamodb-autoscaling'
+
+service: 'files'
+
+custom:
+  configurables: ${file(config/${self:provider.stage}.yml)}
+
+  capacities: ${self:custom.configurables.capacities}
+  customDomain: ${self:custom.configurables.customDomain}
+
+package:
+  exclude:
+    - 'examples/*'
+
+provider:
+  name: 'aws'
+  runtime: 'nodejs8.10'
+  stage: ${opt:stage, 'staging'}
+  region: 'eu-central-1'
+  endpointType: ${self:custom.configurables.endpointType}
+  deploymentBucket:
+    name: ${self:custom.configurables.deploymentBucket.name}
+    serverSideEncryption: 'AES256'
+  memorySize: 128
+  timeout: 10
+  environment:
+    domainName: ${self:custom.customDomain.domainName}
+    dynamoDbTable:
+      Ref: 'DynamoDbTable'
+    s3Bucket: ${self:custom.configurables.s3Bucket}
+  tags:
+    service: ${self:service}
+    stage: ${self:provider.stage}
+  apiKeys:
+    - 'huy.dinh'
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Action:
+        - 'dynamodb:*'
+      Resource:
+        - Fn::Join:
+          - ':'
+          - - 'arn:aws:dynamodb'
+            - Ref: 'AWS::Region'
+            - Ref: 'AWS::AccountId'
+            - Fn::Join:
+              - '/'
+              - - 'table'
+                - Ref: 'DynamoDbTable'
+        - Fn::Join:
+          - ':'
+          - - 'arn:aws:dynamodb'
+            - Ref: 'AWS::Region'
+            - Ref: 'AWS::AccountId'
+            - Fn::Join:
+              - '/'
+              - - 'table'
+                - Ref: 'DynamoDbTable'
+                - '*'
+    - Effect: 'Allow'
+      Action:
+        - 's3:*'
+      Resource:
+        - 'arn:aws:s3:::${self:custom.configurables.dynamoDbTable}/*'
+
+functions:
+  api-object-create:
+    handler: 'handlers/api-handlers.create'
+    description: 'Create file object.'
+    events:
+      - http:
+          path: '/api/files'
+          method: 'post'
+          cors: true
+          private: true
+
+  api-object-destroy:
+    handler: 'handlers/api-handlers.destroy'
+    description: 'Delete file object.'
+    events:
+      - http:
+          path: '/api/files/{id}'
+          method: 'delete'
+          cors: true
+          private: true
+
+  api-object-index:
+    handler: 'handlers/api-handlers.index'
+    description: 'List file objects.'
+    events:
+      - http:
+          path: '/api/files'
+          method: 'get'
+          cors: true
+          private: true
+
+  api-object-show:
+    handler: 'handlers/api-handlers.show'
+    description: 'Show file object.'
+    events:
+      - http:
+          path: '/api/files/{id}'
+          method: 'get'
+          cors: true
+          private: true
+
+  api-object-update:
+    handler: 'handlers/api-handlers.update'
+    description: 'Update file object.'
+    events:
+      - http:
+          path: '/api/files/{id}'
+          method: 'put'
+          cors: true
+          private: true
+
+  object-download:
+    handler: 'handlers/download-handlers.download'
+    description: 'Download S3 object.'
+    events:
+      - http:
+          path: '/{id}'
+          method: 'get'
+
+  object-display:
+    handler: 'handlers/download-handlers.display'
+    description: 'Display S3 object inline.'
+    events:
+      - http:
+          path: '/{id}/inline'
+          method: 'get'
+
+  process-dynamodb-event:
+    handler: 'handlers/dynamodb-handlers.processDynamoDbEvent'
+    description: 'Process DynamoDB stream event.'
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt:
+              - 'DynamoDbTable'
+              - 'StreamArn'
+
+  process-s3-delete-event:
+    handler: 'handlers/s3-handlers.processS3DeleteEvent'
+    description: 'Process S3 deletion.'
+    events:
+      - s3:
+          bucket: ${self:custom.configurables.s3Bucket}
+          event: 's3:ObjectRemoved:*'
+
+  process-s3-create-event:
+    handler: 'handlers/s3-handlers.processS3CreateEvent'
+    description: 'Process S3 upload.'
+    events:
+      - s3:
+          bucket: ${self:custom.configurables.s3Bucket}
+          event: 's3:ObjectCreated:*'
+
+resources:
+  Resources:
+    ApiGatewayRestApi:
+      Type: 'AWS::ApiGateway::RestApi'
+      Properties:
+        Name: '${self:service}-${self:provider.stage}'
+        EndpointConfiguration:
+          Types:
+            - ${self:provider.endpointType}
+
+    ApiGatewayMethodGet:
+      Type: 'AWS::ApiGateway::Method'
+      Properties:
+        HttpMethod: 'GET'
+        AuthorizationType: 'NONE'
+        Integration:
+          Type: 'MOCK'
+          RequestTemplates:
+            application/json: '{ "statusCode": 308 }'
+          IntegrationResponses:
+            - StatusCode: 308
+              ResponseParameters:
+                method.response.header.location: "'${self:custom.configurables.rootUri}'"
+              ResponseTemplates:
+                application/json: '{}'
+        MethodResponses:
+          - StatusCode: 308
+            ResponseParameters:
+              method.response.header.location: false
+        ResourceId:
+          Fn::GetAtt:
+            - 'ApiGatewayRestApi'
+            - 'RootResourceId'
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+
+    DynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      Properties:
+        TableName: ${self:custom.configurables.dynamoDbTable}
+        AttributeDefinitions:
+          - AttributeName: 'id'
+            AttributeType: 'S'
+          - AttributeName: 's3Key'
+            AttributeType: 'S'
+        KeySchema:
+          - AttributeName: 'id'
+            KeyType: 'HASH'
+        GlobalSecondaryIndexes:
+          - IndexName: '${self:custom.configurables.dynamoDbTable}-s3-key-index'
+            KeySchema:
+              - AttributeName: 's3Key'
+                KeyType: 'HASH'
+            Projection:
+              ProjectionType: 'ALL'
+            ProvisionedThroughput:
+              ReadCapacityUnits: 1
+              WriteCapacityUnits: 1
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        SSESpecification:
+          SSEEnabled: true
+        StreamSpecification:
+          StreamViewType: 'NEW_AND_OLD_IMAGES'
+        TimeToLiveSpecification:
+          AttributeName: 'expiresAt'
+          Enabled: true

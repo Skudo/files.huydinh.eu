@@ -1,0 +1,21 @@
+capacities:
+  - table: 'DynamoDbTable'
+    read:
+      minimum: 1
+      maximum: 10
+      usage: 0.8
+    write:
+      minimum: 1
+      maximum: 1
+      usage: 0.8
+customDomain:
+  domainName: 'files.huydinh.eu'
+  basePath: ''
+  createRoute53Record: true
+  endpointType: 'edge'
+deploymentBucket:
+  name: 'artifacts.huydinh.eu'
+dynamoDbTable: 'files.huydinh.eu'
+endpointType: 'EDGE'
+rootUri: 'https://huydinh.eu'
+s3Bucket: 'files.huydinh.eu'
