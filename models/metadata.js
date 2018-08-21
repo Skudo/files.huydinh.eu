@@ -13,6 +13,7 @@ const generatedS3Key = (id, filename) => {
 class Metadata {
   constructor (params = {}, options = {}) {
     this.id = params.id || uuid()
+    this.attributes = params.attributes || {}
 
     this.client = options.client || new AWS.DynamoDB.DocumentClient()
     this.tableName = options.tableName || process.env.dynamoDbTable
@@ -30,9 +31,7 @@ class Metadata {
   }
 
   static create (data, options = {}) {
-    const object = new Metadata({
-      id: data.id
-    }, options)
+    const object = new Metadata({}, options)
 
     return object.put(data).then(() => {
       return object
@@ -64,18 +63,36 @@ class Metadata {
     }).promise()
   }
 
-  get () {
+  fetch () {
+    const self = this
+
     return this.client.get({
       TableName: this.tableName,
       Key: {
         id: this.id
       }
     }).promise().then(response => {
-      return response.Item
+      self.attributes = response.Item
+
+      return self.attributes
+    })
+  }
+
+  get () {
+    const self = this
+
+    if (Object.keys(this.attributes).length === 0) {
+      return this.fetch()
+    }
+
+    return new Promise((resolve) => {
+      return resolve(self.attributes)
     })
   }
 
   put (data) {
+    const self = this
+
     const item = {
       id: this.id,
       accessCount: data.accessCount || 0,
@@ -89,7 +106,9 @@ class Metadata {
       TableName: this.tableName,
       Item: item
     }).promise().then((response) => {
-      return item
+      self.attributes = response.Item
+
+      return self.attributes
     })
   }
 }

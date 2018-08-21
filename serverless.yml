@@ -27,8 +27,7 @@ provider:
   timeout: 10
   environment:
     domainName: ${self:custom.customDomain.domainName}
-    dynamoDbTable:
-      Ref: 'DynamoDbTable'
+    dynamoDbTable: ${self:custom.configurables.dynamoDbTable}
     s3Bucket: ${self:custom.configurables.s3Bucket}
   tags:
     service: ${self:service}

@@ -26,7 +26,7 @@ class File {
     return Metadata.create(data).then((metadata) => {
       return new File({
         id: metadata.id,
-        metadata: metadata
+        metadata: metadata.attributes
       })
     })
   }
